@@ -503,19 +503,21 @@ if __name__ == '__main__':
     train_dataset, val_dataset, eval_metric = get_dataset(args.dataset, args)
 
     # network
+    module_list = []
+    if args.use_fpn:
+        module_list.append('fpn')
     if args.dataset.lower() == 'imaterialist':
         # pretrained on coco dataset
-        net = get_model('mask_rcnn_%s_coco'%(args.network), pretrained=True)
+        net_name = '_'.join(('mask_rcnn', *module_list, args.network, 'coco'))
+        # 'mask_rcnn_%s_coco'%(args.network)
+        net = get_model(net_name, pretrained=True)
         # reuse the previously trained weights for specified classes
         # {'tie':'tie', 'umbrella':'umbrella', 'bag, wallet':'handbag', 'glove':'baseball glove'}
         net.reset_class(train_dataset.CLASSES, reuse_weights={16: 27, 26: 25, 24: 26, 17: 35})
     else:
-        module_list = []
-        if args.use_fpn:
-            module_list.append('fpn')
         net_name = '_'.join(('mask_rcnn', *module_list, args.network, args.dataset))
-        args.save_prefix += net_name
         net = get_model(net_name, pretrained_base=True)
+    args.save_prefix += net_name
     if args.resume.strip():
         net.load_parameters(args.resume.strip())
     else:
