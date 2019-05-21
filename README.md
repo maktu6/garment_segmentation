@@ -1,9 +1,9 @@
 # Garment Segmentation
 ## Requirements
-- pycocotools
-- mxnet
-- gluoncv
-> Note: install nightly build gluoncv for less bugs  
+- [pycocotools](https://github.com/cocodataset/cocoapi)
+- [mxnet](http://mxnet.incubator.apache.org/versions/master/install/)
+- [gluoncv](https://gluon-cv.mxnet.io/index.html)
+> Note: please install nightly build gluoncv for less bugs  
 > `pip install gluoncv --pre --upgrade`
 
 ## Dataset 
@@ -17,6 +17,7 @@ python tools/convert_imaterialist_to_coco.py --data_root datasets/imaterialist
 datasets
 └─imaterialist
     ├── annotations
+        ├── resize_rle_instances_val.json
     │   ├── rle_instances_train.json
     |   └── rle_instances_val.json
     ├── test
@@ -31,3 +32,5 @@ datasets
 python train_mask_rcnn.py --save-prefix train_logs/ftCOCO_noWarmUp/maskRCNN_resnet50 \
 			  -j 0 --lr 0.0008 --lr-warmup -1 --val-interval 1
 ```
+## Reference
+- [Train Mask RCNN end-to-end on MS COCOh](ttps://gluon-cv.mxnet.io/build/examples_instance/train_mask_rcnn_coco.html)

@@ -162,7 +162,23 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
     ann_dict['info'] = label_descriptions['info']
     return ann_dict
 
-def main(data_root, val_num, copy_val, use_polygon=False, num_workers=2):
+def resize_rles(ann_dict, shape=(512, 512)):
+    """ resize RLEs for val set, since it require (512, 512) for computing metric
+    """
+    for ann_dict in tqdm(ann_dict['annotations']):
+        # rle to mask
+        rle = ann_dict['segmentation']
+        mask = maskUtils.decode(rle) # hxw
+        # resize mask
+        mask = cv2.resize(mask, shape, interpolation=cv2.INTER_NEAREST)
+        mask = np.asfortranarray(mask.reshape((SHAPE[1], SHAPE[0], 1), order='F'))
+        # mask to rle
+        rle = maskUtils.encode(mask)[0]
+        rle['counts'] = str(rle['counts'], encoding='utf-8')
+        ann_dict['segmentation'] = rle
+    return ann_dict
+
+def main(data_root, val_num, copy_val, use_polygon=False, num_workers=2, resize_val=True):
     # load csv file
     csv_path = os.path.join(data_root, "train.csv")
     train_df = pd.read_csv(csv_path)
@@ -211,6 +227,12 @@ def main(data_root, val_num, copy_val, use_polygon=False, num_workers=2):
         ann_dict = convert_imaterialist2coco(img_ids, train_df, label_descriptions, use_polygon, num_workers)
         with open(json_path, 'w') as outfile:
             json.dump(ann_dict, outfile)
+        # resize RLEs for val set, since it require (512, 512) for computing metric
+        if resize_val and set_names[i]=="val":
+            resize_rles(ann_dict)
+            json_path = json_path.replace('rle_instances', 'resize_rle_instances')
+            with open(json_path, 'w') as outfile:
+                json.dump(ann_dict, outfile)
 
 if __name__ == "__main__":
     import pandas as pd 
