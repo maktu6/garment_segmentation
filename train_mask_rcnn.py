@@ -7,6 +7,7 @@ os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
 import logging
 import time
 import numpy as np
+import cv2
 import mxnet as mx
 from mxnet import gluon
 from mxnet import autograd
@@ -321,7 +322,7 @@ def validate(net, val_data, ctx, eval_metric, args):
                 full_masks = []
                 for bbox, mask in zip(det_bbox, det_mask):
                     mask = gdata.transforms.mask.fill(mask, bbox, (im_width, im_height))
-                    if dataset.lower() == 'imaterialist':
+                    if args.dataset.lower() == 'imaterialist':
                         # compute metric at size (512, 512)
                         mask = cv2.resize(mask, (512, 512), cv2.INTER_NEAREST)
                     full_masks.append(mask)
