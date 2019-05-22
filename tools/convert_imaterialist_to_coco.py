@@ -130,8 +130,8 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
         csv_df: load from "train.csv"
         label_descriptions: load from "label_descriptions.json"
         use_polygon: if True, the masks are encoded as polygons, else RLE
-        num_workers: number of workers for multiprocessing
         (more details see https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/mask.py)
+        num_workers: number of workers for multiprocessing
     """
     images = []
     annotations = []
@@ -164,6 +164,9 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
 
 def resize_rles(ann_dict, shape=(512, 512)):
     """ resize RLEs for val set, since it require (512, 512) for computing metric
+    Args:
+        ann_dict: a coco-style dict
+        shape: (width, height)
     """
     for ann_dict in tqdm(ann_dict['annotations']):
         # rle to mask
@@ -171,7 +174,7 @@ def resize_rles(ann_dict, shape=(512, 512)):
         mask = maskUtils.decode(rle) # hxw
         # resize mask
         mask = cv2.resize(mask, shape, interpolation=cv2.INTER_NEAREST)
-        mask = np.asfortranarray(mask.reshape((SHAPE[1], SHAPE[0], 1), order='F'))
+        mask = np.asfortranarray(mask.reshape((shape[1], shape[0], 1), order='F'))
         # mask to rle
         rle = maskUtils.encode(mask)[0]
         rle['counts'] = str(rle['counts'], encoding='utf-8')
@@ -227,7 +230,7 @@ def main(data_root, val_num, copy_val, use_polygon=False, num_workers=2, resize_
         ann_dict = convert_imaterialist2coco(img_ids, train_df, label_descriptions, use_polygon, num_workers)
         with open(json_path, 'w') as outfile:
             json.dump(ann_dict, outfile)
-        # resize RLEs for val set, since it require (512, 512) for computing metric
+        # resize RLEs for val set, since it requires (512, 512) for computing metric
         if resize_val and set_names[i]=="val":
             resize_rles(ann_dict)
             json_path = json_path.replace('rle_instances', 'resize_rle_instances')

@@ -29,7 +29,7 @@ datasets
 ```
 ## Training
 ```bash
-python train_mask_rcnn.py --save-prefix train_logs/ftCOCO_noWarmUp/maskRCNN_resnet50 \
+python train_mask_rcnn.py --save-prefix train_logs/ftCOCO_noWarmUp/ \
 			  -j 0 --lr 0.0008 --lr-warmup -1 --val-interval 1
 ```
 ## Reference
