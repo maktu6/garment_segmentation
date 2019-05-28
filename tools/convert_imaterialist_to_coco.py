@@ -108,7 +108,7 @@ def extract_image_annotations(i, img_id, seg_df, use_polygon=False):
             ann['bbox'] = xywh_box
         else:
             # mask need to be (h, w, 1) and Fortran contiguous
-            mask = np.asfortranarray(mask.reshape((h, w, 1), order='F'))
+            mask = np.asfortranarray(mask.reshape((mask.shape[0], -1, 1), order='F'))
             rle = maskUtils.encode(mask)[0]
             ann['area'] = int(maskUtils.area(rle))
             box = maskUtils.toBbox(rle)

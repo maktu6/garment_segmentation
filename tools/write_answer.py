@@ -7,7 +7,8 @@ import pandas as pd
 from tqdm import tqdm
 import mxnet as mx
 from gluoncv import model_zoo, data, utils
-
+import sys
+sys.path.append('./')
 from utils.mask import expand_mask, rle_encode
 
 CLASSES = ['shirt, blouse', 'top, t-shirt, sweatshirt', 'sweater', 'cardigan', 'jacket', 'vest', 
@@ -33,6 +34,7 @@ def write_ans(model_name, weight_path, test_root, sample_csv_path, ctx=mx.gpu())
     net.initialize()
     net.reset_class(CLASSES)
     net.load_parameters(weight_path)
+    print("load model from %s"%weight_path)
     net.collect_params().reset_ctx(ctx)
     # load sample 
     sample_df = pd.read_csv(sample_csv_path)
@@ -54,10 +56,11 @@ def write_ans(model_name, weight_path, test_root, sample_csv_path, ctx=mx.gpu())
                 continue
             rle = rle_encode(masks_resize[i,:,:])
             bbox = ' '.join([str(x) for x in (np.round(bbox_list[i]).astype('int'))])
-            sub_list.append([img_name, rle, cid, score_list[i], bbox])
+            coco_rle = str(ans_dict['coco_rle'][i]['counts'], encoding='utf-8') # TODO: a bug for decoding to mask
+            sub_list.append([img_name, rle, cid, score_list[i], bbox, coco_rle])
     # save csv file
     col_names = list(sample_df.columns)
-    col_names.extend(['score', 'bbox'])
+    col_names.extend(['score', 'bbox', 'coco_rle'])
     submission_df = pd.DataFrame(sub_list, columns=col_names)
     return submission_df
 
@@ -67,7 +70,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Write answer for submission")
     parser.add_argument("--model_name", type=str, default='mask_rcnn_resnet50_v1b_coco',
                         help="the pretrained network name")
-    parser.add_argument("--weight_path", type=str, default='train_logs/ftCOCO_noWarmUp/maskRCNN_resnet50_0000_0.0000.params',
+    parser.add_argument("--weight_path", type=str, default='train_logs/ftCOCO_noWarmUp/mask_rcnn_resnet50_v1b_coco_best.params',
                         help="the path of the model weight")
     parser.add_argument("--save_dir", type=str, default=None,
                         help="The dir to save submission file (default is the dir of weight_path")
@@ -82,7 +85,8 @@ if __name__ == "__main__":
     ctx = mx.gpu(args.gpu)
     submission_df = write_ans(args.model_name, args.weight_path, 
                               args.test_root, args.sample_csv_path, ctx)
-    csv_path = os.path.join(args.save_dir, "submission.csv")
+    csv_path = os.path.join(args.save_dir, "answer.csv")
     submission_df.to_csv(csv_path, index=False)
+    print("save result in %s"%csv_path)
 
 

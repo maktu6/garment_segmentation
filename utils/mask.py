@@ -4,9 +4,10 @@ import numpy as np
 import mxnet as mx
 import cv2
 from gluoncv.data.transforms.mask import fill
+import pycocotools.mask as cocomask
 
 def rle_encode(img):
-    "Return run-length encoding string from `img`"
+    """Return run-length encoding string from `img`"""
     pixels = np.concatenate([[0], img.ravel(order='F'), [0]])
     runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
     runs[1::2] -= runs[::2]
@@ -37,7 +38,8 @@ def expand_mask(masks, bboxes, im_shape, scores=None, thresh=0.5, labels=None, o
     Returns
     -------
     if labels is None, return Binary images with shape `N, height, width` (numpy.ndarray)
-    otherwise return a dict {'mask': numpy.ndarray, 'label': list, 'score': list}
+    otherwise return a dict {'mask': numpy.ndarray, 'label': list, 'score': list,
+                             'bbox': a list of array, 'coco_rle': a list of dict}
 
 
     """
@@ -62,6 +64,7 @@ def expand_mask(masks, bboxes, im_shape, scores=None, thresh=0.5, labels=None, o
     cls_ids = []
     score_list = []
     bbox_list = []
+    coco_rle_list = []
     for i in sorted_inds:
         if scores is not None and scores[i] < thresh:
             continue
@@ -74,12 +77,16 @@ def expand_mask(masks, bboxes, im_shape, scores=None, thresh=0.5, labels=None, o
         mask = masks[i]
         bbox = bboxes[i]
         mask = fill(mask, bbox, im_shape)
+        # encode to coco_rle
+        mask_f = np.asfortranarray(mask.reshape((mask.shape[0], -1, 1), order='F'))
+        coco_rle = cocomask.encode(mask_f)[0]
         if output_shape:
             mask = cv2.resize(mask, output_shape, cv2.INTER_NEAREST)
-        full_masks.append(mask)
         bbox_list.append(bbox)
+        coco_rle_list.append(coco_rle)
+        full_masks.append(mask)
     full_masks = np.array(full_masks)
     if labels is None:
         return full_masks
     return {'mask':full_masks, 'label':cls_ids, 
-            'score': score_list, 'bbox': bbox_list}
+            'score': score_list, 'bbox': bbox_list, 'coco_rle': coco_rle_list}
