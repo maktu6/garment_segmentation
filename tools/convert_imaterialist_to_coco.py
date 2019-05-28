@@ -123,7 +123,7 @@ def extract_image_annotations(i, img_id, seg_df, use_polygon=False):
 def extractor(args):
     return extract_image_annotations(*args)
 
-def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=False, num_workers=2):
+def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=False, num_workers=2, start_id=0):
     """ convert iMaterialis dataset to COCO-style annotations
     Args:
         img_ids: a list of ImageId
@@ -132,6 +132,7 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
         use_polygon: if True, the masks are encoded as polygons, else RLE
         (more details see https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/mask.py)
         num_workers: number of workers for multiprocessing
+        start_id: for differnt img_ids for train and val
     """
     images = []
     annotations = []
@@ -141,7 +142,7 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
 #         images.append(image); annotations.extend(ann_list)
     def generate_args():
         for i in tqdm(range(len(img_ids))):
-            img_id = img_ids[i]
+            img_id = img_ids[start_id+i]
             seg_df = csv_df[csv_df.ImageId==img_id]
             yield (i, img_id, seg_df, use_polygon)
 
@@ -227,7 +228,9 @@ def main(data_root, val_num, copy_val, use_polygon=False, num_workers=2, resize_
             continue
         else:
             print("- Processing %s set ..."%set_names[i])
-        ann_dict = convert_imaterialist2coco(img_ids, train_df, label_descriptions, use_polygon, num_workers)
+        # img_ids in val set resume from train set
+        start_id = 0 if set_names[i]=="train" else len(train_img_ids)
+        ann_dict = convert_imaterialist2coco(img_ids, train_df, label_descriptions, use_polygon, num_workers, start_id=start_id)
         with open(json_path, 'w') as outfile:
             json.dump(ann_dict, outfile)
         # resize RLEs for val set, since it requires (512, 512) for computing metric

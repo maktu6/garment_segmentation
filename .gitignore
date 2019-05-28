@@ -7,3 +7,4 @@ train_logs/*
 *.sh
 *.ipynb
 !attributes_classify/*.ipynb
+!**/.gitkeep
