@@ -142,9 +142,9 @@ def convert_imaterialist2coco(img_ids, csv_df, label_descriptions, use_polygon=F
 #         images.append(image); annotations.extend(ann_list)
     def generate_args():
         for i in tqdm(range(len(img_ids))):
-            img_id = img_ids[start_id+i]
+            img_id = img_ids[i]
             seg_df = csv_df[csv_df.ImageId==img_id]
-            yield (i, img_id, seg_df, use_polygon)
+            yield (i+start_id, img_id, seg_df, use_polygon)
 
     with multiprocessing.Pool(num_workers) as pool:
         imap_unordered_it = pool.imap_unordered(extractor, generate_args())
