@@ -83,6 +83,8 @@ def extract_image_annotations(i, img_id, seg_df, use_polygon=False):
     image['id'] = i
     image['file_name'] = img_id
     w, h = int(seg_df.iloc[0]["Width"]), int(seg_df.iloc[0]["Height"])
+    if img_id in WRONG_IMG_IDS:
+        w, h = h, w
     image['width'] = w
     image['height'] = h
     # annotations
