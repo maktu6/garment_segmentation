@@ -6,6 +6,7 @@ from collections import OrderedDict
 from pycocotools import mask as coco_mask
 import matplotlib.pyplot as plt
 from PIL import Image
+import random
 import torch.utils.data as data
 from torchvision import transforms
 
@@ -43,7 +44,7 @@ def built_attr2label(attr_for_classify):
 #     label_dict['mask'] =  list(train_df['coco_rle'].values)
 #     return label_dict
 
-def crop_target(img, rle, size, del_bg=False, coco_rle=False):
+def crop_target(img, rle, size, del_bg=False, coco_rle=False, dilation=-1):
     if coco_rle:
         mask = coco_mask.decode({"size":(img.size[1], img.size[0]), "counts":rle})
     else:
@@ -56,11 +57,12 @@ def crop_target(img, rle, size, del_bg=False, coco_rle=False):
         img = transforms.functional.resize(img, DOWN_SIZE, interpolation=Image.BILINEAR)
     ys, xs = np.where(mask)
     box = np.array([[xs.min(), ys.min(), xs.max(), ys.max()]])
-    img_box = get_image_boxes(box, img, size=size, mask=(mask if del_bg else None))[0]
-    return img_box
+    img_box, edge = get_image_boxes(box, img, size=size, mask=(mask if del_bg else None), dilation=dilation)
+    return img_box[0], edge[0]
 
 class MyDataset(data.Dataset):
-    def __init__(self, root, csv, attr_for_classify, transform=None, del_bg=True, infer=False):
+    def __init__(self, root, csv, attr_for_classify, transform=None, 
+                 del_bg=True, infer=False, mode='train', use_dilation=True, use_jitter=True):
         self.root = os.path.join(root, ("test" if infer else "train"))
         self.classes_dict = attr_for_classify
         self.infer = infer
@@ -72,6 +74,19 @@ class MyDataset(data.Dataset):
         self.attr2label = built_attr2label(attr_for_classify)
         self.transform = transform
         self.del_bg = del_bg
+        if mode=="train" and not infer:
+            self.dilation = None
+            self.colorjitter = transforms.ColorJitter(brightness=0.1, contrast=0.1, 
+                                                      saturation=0.1, hue=0.15)
+        else:
+            self.dilation = 3
+            self.colorjitter = None
+        if not use_jitter:
+            self.colorjitter = None
+        if not use_dilation:
+            self.dilation = -1
+           
+        
 
     def __getitem__(self, index):
         labels = []
@@ -84,7 +99,21 @@ class MyDataset(data.Dataset):
                 labels.append(label)
         path = os.path.join(self.root, img_name)
         img = Image.open(path)
-        sample = crop_target(img, rle, size=299, del_bg=self.del_bg, coco_rle=not self.infer)
+        
+        if not self.dilation:
+            dilation = random.randint(2,4)
+        else:
+            dilation = self.dilation
+        sample, edge = crop_target(img, rle, size=299, del_bg=self.del_bg, 
+                                   coco_rle=not self.infer, dilation=dilation)
+        
+        if self.colorjitter is not None:
+            sample = self.colorjitter(sample)
+
+        if edge is not None:
+            sample = np.array(sample)
+            sample[np.where(edge[:,:])] = (255,255,255)
+            sample = Image.fromarray(sample)
         if self.transform is not None:
             sample = self.transform(sample)
         return sample, labels

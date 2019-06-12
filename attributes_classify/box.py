@@ -1,5 +1,7 @@
 import numpy as np
+import cv2
 from PIL import Image
+import skimage.morphology as sm
 
 def rle_decode(mask_rle, shape, class_id=1):
     "Return an image array from run-length encoded string `mask_rle` with `shape`."
@@ -31,7 +33,7 @@ def convert_to_square(bboxes):
     square_bboxes[:, 3] = square_bboxes[:, 1] + max_side - 1.0
     return square_bboxes
 
-def get_image_boxes(bounding_boxes, img, size=24, mask=None):
+def get_image_boxes(bounding_boxes, img, size=24, mask=None, dilation=0):
     """Cut out boxes from the image.
     Arguments:
         bounding_boxes: a float numpy array of shape [n, 5].
@@ -45,8 +47,8 @@ def get_image_boxes(bounding_boxes, img, size=24, mask=None):
     width, height = img.size
 
     [dy, edy, dx, edx, y, ey, x, ex, w, h] = correct_bboxes(bounding_boxes, width, height)
-    img_boxes = []# np.zeros((num_boxes, 3, size, size), 'float32')
-
+    img_boxes = [] # np.zeros((num_boxes, 3, size, size), 'float32')
+    edges = []
     for i in range(num_boxes):
         img_box = np.zeros((h[i], w[i], 3), 'uint8')
 
@@ -54,11 +56,21 @@ def get_image_boxes(bounding_boxes, img, size=24, mask=None):
         img_box[dy[i]:(edy[i] + 1), dx[i]:(edx[i] + 1), :] =\
             img_array[y[i]:(ey[i] + 1), x[i]:(ex[i] + 1), :]
         if mask is not None:
+            # remove backgroud
             mask_box = np.zeros((h[i], w[i]), 'uint8')
             mask_array = np.asarray(mask, 'uint8')
             mask_box[dy[i]:(edy[i] + 1), dx[i]:(edx[i] + 1)] =\
             mask_array[y[i]:(ey[i] + 1), x[i]:(ex[i] + 1)]
             img_box = img_box * mask_box[:, :, np.newaxis]
+            # edge
+            if dilation>0:
+                mask_box = cv2.resize(mask_box, (size, size), cv2.INTER_NEAREST)
+                mask_box_dila = sm.dilation(mask_box, sm.disk(dilation))
+                edge = mask_box_dila - mask_box
+            else:
+                edge = None
+            edges.append(edge)
+
         # resize
         img_box = Image.fromarray(img_box)
         img_box = img_box.resize((size, size), Image.BILINEAR)
@@ -66,7 +78,7 @@ def get_image_boxes(bounding_boxes, img, size=24, mask=None):
         img_boxes.append(img_box)
 #         img_boxes[i, :, :, :] = _preprocess(img_box)
 
-    return img_boxes
+    return img_boxes, edges
 
 def correct_bboxes(bboxes, width, height):
     """Crop boxes that are too big and get coordinates
