@@ -1,7 +1,8 @@
 import numpy as np
-from gluoncv.data import COCOInstance
+from gluoncv.data import COCOInstance, COCOSegmentation
 from pycocotools.coco import COCO
 import os
+import pickle
 
 class COCOiMaterialist(COCOInstance):
     
@@ -97,3 +98,53 @@ class COCOiMaterialist(COCOInstance):
         else:
             valid_objs = np.asarray(valid_objs).astype('float32')
         return valid_objs, valid_segs
+
+class iMaterialistSegmentation(COCOSegmentation):
+    CAT_LIST = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    NUM_CLASS = 14
+    def __init__(self, root=os.path.expanduser('datasets/imaterialist'),
+                 split='train', mode=None, transform=None, **kwargs):
+        super(COCOSegmentation, self).__init__(root, split, mode, transform, **kwargs)
+        from pycocotools import mask
+        if split == 'train':
+            print('train set')
+            ann_file = os.path.join(root, 'annotations/rle_instances_train.json')
+            ids_file = os.path.join(root, 'annotations/train_ids.mx')
+            self.root = os.path.join(root, 'train')
+        else:
+            print('val set')
+            ann_file = os.path.join(root, 'annotations/rle_instances_val.json')
+            ids_file = os.path.join(root, 'annotations/val_ids.mx')
+            self.root = os.path.join(root, 'val')
+        self.coco = COCO(ann_file)
+        self.coco_mask = mask
+        if os.path.exists(ids_file):
+            with open(ids_file, 'rb') as f:
+                self.ids = pickle.load(f)
+        else:
+            ids = list(self.coco.imgs.keys())
+            self.ids = self._preprocess(ids, ids_file)
+        self.transform = transform
+
+    def _gen_seg_mask(self, target, h, w):
+        mask = np.zeros((h, w), dtype=np.uint8)
+        coco_mask = self.coco_mask
+        for instance in target:
+            m = coco_mask.decode(instance['segmentation'])
+            cat = instance['category_id']
+            if cat in self.CAT_LIST:
+                c = self.CAT_LIST.index(cat)
+            else:
+                continue
+            if len(m.shape) < 3:
+                mask[:, :] += (mask == 0) * (m * c)
+            else:
+                mask[:, :] += (mask == 0) * (((np.sum(m, axis=2)) > 0) * c).astype(np.uint8)
+        return mask
+
+    @property
+    def classes(self):
+        """Category names."""
+        return ('background', 'shirt, blouse', 'top, t-shirt, sweatshirt', 'sweater', 
+                'cardigan', 'jacket', 'vest', 'pants', 'shorts', 'skirt', 'coat', 
+                'dress', 'jumpsuit', 'cape')
