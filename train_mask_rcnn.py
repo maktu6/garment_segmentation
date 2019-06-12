@@ -21,7 +21,8 @@ from gluoncv.utils.metrics.coco_instance import COCOInstanceMetric
 
 from utils.metric import RCNNAccMetric, RCNNL1LossMetric, RPNAccMetric, RPNL1LossMetric, \
     MaskAccMetric, MaskFGAccMetric
-from utils.argument import parse_args
+from utils.argument import parse_args_for_rcnn as parse_args
+from utils.logger import build_logger
 
 def get_dataset(dataset, args):
     if dataset.lower() == 'coco':
@@ -177,15 +178,8 @@ def train(net, train_data, val_data, eval_metric, ctx, args):
                 rcnn_mask_metric, rcnn_fgmask_metric]
 
     # set up logger
-    logging.basicConfig()
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
     log_file_path = args.save_prefix + '_train.log'
-    log_dir = os.path.dirname(log_file_path)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    fh = logging.FileHandler(log_file_path)
-    logger.addHandler(fh)
+    logger = build_logger(log_file_path)
     logger.info(args)
     if args.verbose:
         logger.info('Trainable parameters:')
