@@ -1,4 +1,6 @@
 import os
+# disable autotune
+os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
 import shutil
 import argparse
 import numpy as np
@@ -40,6 +42,23 @@ def reset_nclass(model, nclass):
     replace_conv(model.auxlayer.block, 4, nclass)
     model.nclass = nclass
 
+class MixSoftmaxCrossEntropyLossEpsilon(MixSoftmaxCrossEntropyLoss):
+    def _aux_forward(self, F, pred1, pred2, label, **kwargs):
+        """Compute loss including auxiliary output"""
+        loss1 = self.hybrid_forward_epsilon(F, pred1, label, **kwargs)
+        loss2 = self.hybrid_forward_epsilon(F, pred2, label, **kwargs)
+        return loss1 + self.aux_weight * loss2
+
+    def hybrid_forward_epsilon(self, F, pred, label):
+        """Compute loss"""
+        softmaxout = F.SoftmaxOutput(
+            pred, label.astype(pred.dtype), ignore_label=self._ignore_label,
+            multi_output=self._sparse_label,
+            use_ignore=True, normalization='valid' if self._size_average else 'null')
+        loss = -F.pick(F.log(softmaxout+1e-12), label, axis=1, keepdims=True)
+        loss = F.where(label.expand_dims(axis=1) == self._ignore_label,
+                       F.zeros_like(loss), loss)
+        return F.mean(loss, axis=self._batch_axis, exclude=True)
 
 class Trainer(object):
     def __init__(self, args, logger):
@@ -97,7 +116,7 @@ class Trainer(object):
                 raise RuntimeError("=> no checkpoint found at '{}'" \
                     .format(args.resume))
         # create criterion
-        criterion = MixSoftmaxCrossEntropyLoss(args.aux, aux_weight=args.aux_weight)
+        criterion = MixSoftmaxCrossEntropyLossEpsilon(args.aux, aux_weight=args.aux_weight)
         self.criterion = DataParallelCriterion(criterion, args.ctx, args.syncbn)
         # optimizer and lr scheduling
         self.lr_scheduler = LRScheduler(mode='poly', base_lr=args.lr,
@@ -129,20 +148,20 @@ class Trainer(object):
         train_loss = 0.0
         alpha = 0.2
         for i, (data, target) in enumerate(tbar):
-            current_loss = 0.0
             with autograd.record(True):
                 outputs = self.net(data.astype(args.dtype, copy=False))
                 losses = self.criterion(outputs, target)
                 mx.nd.waitall()
-                # check whether nan in losses
-                for loss in losses:
-                    current_loss += np.mean(loss.asnumpy()) / len(losses)
-                if np.isnan(current_loss):
-                    self.logger.warning("Raise nan,Batch %d, losses: %s"%(i, losses))
-                else:
-                    autograd.backward(losses)
-            if not np.isnan(current_loss):
-                self.optimizer.step(self.args.batch_size)
+                autograd.backward(losses)
+            self.optimizer.step(self.args.batch_size)
+
+            current_loss = 0.0
+            for loss in losses:
+                current_loss += np.mean(loss.asnumpy()) / len(losses)
+            # check whether nan in losses
+            if np.isnan(current_loss):
+                self.logger.warning("Raise nan,Batch %d, losses: %s"%(i, losses))
+            else:
                 train_loss += current_loss
             tbar.set_description('Epoch %d, mloss %.3f'%\
                 (epoch, train_loss/(i+1)))
