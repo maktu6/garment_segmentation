@@ -144,7 +144,7 @@ class Trainer(object):
             if not np.isnan(current_loss):
                 self.optimizer.step(self.args.batch_size)
                 train_loss += current_loss
-            tbar.set_description('Epoch %d, training loss %.3f'%\
+            tbar.set_description('Epoch %d, mloss %.3f'%\
                 (epoch, train_loss/(i+1)))
             if self.args.log_interval and not (i + 1) % self.args.log_interval:
                 self.logger.info('Epoch %d, Batch %d, current loss %.3f, mean loss %.3f'%\
@@ -162,7 +162,7 @@ class Trainer(object):
             targets = mx.gluon.utils.split_and_load(target, args.ctx, even_split=False)
             self.metric.update(targets, outputs)
             pixAcc, mIoU = self.metric.get()
-            tbar.set_description('Epoch %d, validation pixAcc: %.3f, mIoU: %.3f'%\
+            tbar.set_description('Epoch %d, pixAcc: %.3f, mIoU: %.3f'%\
                 (epoch, pixAcc, mIoU))
             mx.nd.waitall()
         if mIoU>self.best_mIoU:
