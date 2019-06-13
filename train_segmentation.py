@@ -13,20 +13,33 @@ import gluoncv
 from gluoncv.loss import *
 from gluoncv.utils import LRScheduler
 from gluoncv.model_zoo.segbase import *
-from gluoncv.model_zoo import get_model
+from gluoncv.model_zoo import get_model, get_deeplab_plus_xception_coco
 from gluoncv.utils.parallel import *
 from gluoncv.data import get_segmentation_dataset
 from utils.argument import parse_args_for_segm as parse_args
 from utils.logger import build_logger
 
 def replace_conv(block, index, nclass):
+    """replace the last conv with a new conv which has `nclass` channels"""
     ctx = list(block[4].params.values())[0].list_ctx()
     in_channels = list(block[4].params.values())[0].shape[1]
     
     new_layer = nn.Conv2D(in_channels=in_channels, 
                       channels=nclass, kernel_size=1)
     new_layer.initialize(ctx=ctx)
-    block._children['4'] = new_layer
+    block._children[str(index)] = new_layer
+
+def reset_nclass(model, nclass):
+    """reset the number of classes for model"""
+    if 'deeplabv3plus' in model.name:
+        replace_conv(model.head.block, 8, nclass)
+    elif 'deeplabv3' in model.name:
+        replace_conv(model.head.block, 4, nclass)
+    else:
+        raise NotImplementedError("do not support %s"%model.name)
+    replace_conv(model.auxlayer.block, 4, nclass)
+    model.nclass = nclass
+
 
 class Trainer(object):
     def __init__(self, args, logger):
@@ -58,7 +71,11 @@ class Trainer(object):
             last_batch='rollover', num_workers=args.workers)
         # create network
         if args.model_zoo is not None:
-            model = get_model(args.model_zoo, pretrained=True)
+            if args.model_zoo == "deeplab_plus_xception_coco":
+                model = get_deeplab_plus_xception_coco(pretrained=False)
+                self.logger.info("model: %s"%args.model_zoo)
+            else:
+                model = get_model(args.model_zoo, pretrained=True)
         else:
             model = get_segmentation_model(model=args.model, dataset=args.dataset,
                                            backbone=args.backbone, norm_layer=args.norm_layer,
@@ -66,9 +83,7 @@ class Trainer(object):
                                            crop_size=args.crop_size)
         if args.dataset.lower() == 'imaterialist':
             nclass = iMaterialistSegmentation.NUM_CLASS
-            replace_conv(model.head.block, 4, nclass)
-            replace_conv(model.auxlayer.block, 4, nclass)
-            model.nclass = nclass
+            reset_nclass(model, nclass)
         model.cast(args.dtype)
         # print(model)
         self.net = DataParallelModel(model, args.ctx, args.syncbn)
@@ -114,18 +129,21 @@ class Trainer(object):
         train_loss = 0.0
         alpha = 0.2
         for i, (data, target) in enumerate(tbar):
+            current_loss = 0.0
             with autograd.record(True):
                 outputs = self.net(data.astype(args.dtype, copy=False))
                 losses = self.criterion(outputs, target)
                 mx.nd.waitall()
-                autograd.backward(losses)
-            self.optimizer.step(self.args.batch_size)
-            current_loss = 0.0
-            for loss in losses:
-                current_loss += np.mean(loss.asnumpy()) / len(losses)
-            train_loss += current_loss
-            if train_loss/(i+1) is np.nan:
-                self.logger.warning("Raise nan,Batch %d, train_loss: %s, losses: %s"%(i, train_loss, losses))
+                # check whether nan in losses
+                for loss in losses:
+                    current_loss += np.mean(loss.asnumpy()) / len(losses)
+                if np.isnan(current_loss):
+                    self.logger.warning("Raise nan,Batch %d, losses: %s"%(i, losses))
+                else:
+                    autograd.backward(losses)
+            if not np.isnan(current_loss):
+                self.optimizer.step(self.args.batch_size)
+                train_loss += current_loss
             tbar.set_description('Epoch %d, training loss %.3f'%\
                 (epoch, train_loss/(i+1)))
             if self.args.log_interval and not (i + 1) % self.args.log_interval:
