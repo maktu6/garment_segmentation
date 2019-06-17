@@ -100,6 +100,7 @@ class COCOiMaterialist(COCOInstance):
         return valid_objs, valid_segs
 
 class iMaterialistSegmentation(COCOSegmentation):
+    """only using categories less than 13 for segmentation"""
     CAT_LIST = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     NUM_CLASS = 14
     def __init__(self, root=os.path.expanduser('datasets/imaterialist'),

@@ -142,6 +142,8 @@ def parse_args_for_segm():
     # synchronized Batch Normalization
     parser.add_argument('--syncbn', action='store_true', default= False,
                         help='using Synchronized Cross-GPU BatchNorm')
+    parser.add_argument('--freeze-bn', action='store_true', default= False,
+                        help='freezing BatchNorm layers')
     # the parser
     args = parser.parse_args()
     # handle contexts
