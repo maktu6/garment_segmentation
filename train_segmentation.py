@@ -1,7 +1,6 @@
 import os
 # disable autotune
 os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = '0'
-import shutil
 import argparse
 import numpy as np
 from tqdm import tqdm
@@ -152,6 +151,9 @@ class Trainer(object):
             tbar.set_description('Epoch %d, pixAcc: %.3f, mIoU: %.3f'%\
                 (epoch, pixAcc, mIoU))
             mx.nd.waitall()
+        self.logger.info('Epoch %d, pixAcc %.3f, mIoU %.3f'%\
+        (epoch, pixAcc, mIoU))
+        # best model
         if mIoU>self.best_mIoU:
             self.best_mIoU = mIoU
             self.is_best = True # for save checkpoint

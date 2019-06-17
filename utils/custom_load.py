@@ -1,4 +1,5 @@
 import os
+import shutil
 from mxnet.gluon import nn
 from mxnet.gluon.data.vision import transforms
 from gluoncv.model_zoo import get_model, get_deeplab_plus_xception_coco
