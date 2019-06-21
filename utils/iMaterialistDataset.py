@@ -3,6 +3,7 @@ from gluoncv.data import COCOInstance, COCOSegmentation
 from pycocotools.coco import COCO
 import os
 import pickle
+from PIL import Image, ImageOps
 
 class COCOiMaterialist(COCOInstance):
     
@@ -149,3 +150,47 @@ class iMaterialistSegmentation(COCOSegmentation):
         return ('background', 'shirt, blouse', 'top, t-shirt, sweatshirt', 'sweater', 
                 'cardigan', 'jacket', 'vest', 'pants', 'shorts', 'skirt', 'coat', 
                 'dress', 'jumpsuit', 'cape')
+
+    def _sync_pad(self, img, mask):
+        w, h = img.size
+        long_size = max(w, h)
+
+        padh = long_size - h
+        padw = long_size - w
+
+        im_pad = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
+        mask_pad = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
+        return im_pad, mask_pad
+
+    def _testval_sync_transform(self, img, mask):
+        # padding
+        img, mask = self._sync_pad(img, mask)
+        # resize
+        img = img.resize((self.crop_size, self.crop_size), Image.BILINEAR)
+        mask = mask.resize((self.crop_size, self.crop_size), Image.NEAREST)
+        # final transform
+        img, mask = self._img_transform(img), self._mask_transform(mask)
+        return img, mask
+
+    def __getitem__(self, index):
+        coco = self.coco
+        img_id = self.ids[index]
+        img_metadata = coco.loadImgs(img_id)[0]
+        path = img_metadata['file_name']
+        img = Image.open(os.path.join(self.root, path)).convert('RGB')
+        cocotarget = coco.loadAnns(coco.getAnnIds(imgIds=img_id))
+        mask = Image.fromarray(self._gen_seg_mask(
+            cocotarget, img_metadata['height'], img_metadata['width']))
+        # synchrosized transform
+        if self.mode == 'train':
+            img, mask = self._sync_transform(img, mask)
+        elif self.mode == 'val':
+            img, mask = self._val_sync_transform(img, mask)
+        else:
+            assert self.mode == 'testval'
+            img, mask = self._testval_sync_transform(img, mask)
+            # img, mask = self._img_transform(img), self._mask_transform(mask)
+        # general resize, normalize and toTensor
+        if self.transform is not None:
+            img = self.transform(img)
+        return img, mask
