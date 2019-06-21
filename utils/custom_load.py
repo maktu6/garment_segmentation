@@ -48,7 +48,7 @@ def get_custom_segm_dataset(mode, args):
             # TODO: it seems mode='test' for dataset is not implemented
             split_name, mode_name = 'test', 'test'
         if args.dataset.lower() == 'imaterialist':
-            testset = iMaterialistSegmentation(root='dataset/imaterialist', \
+            testset = iMaterialistSegmentation(root='datasets/imaterialist', \
                             split=split_name, mode=mode_name, transform=input_transform)
         else:
             testset = get_segmentation_dataset(
@@ -80,12 +80,14 @@ def reset_nclass(model, nclass):
     replace_conv(model.auxlayer.block, 4, nclass)
     model.nclass = nclass
 
-def get_pretrained_segmentation_model(args):
+def get_pretrained_segmentation_model(args, ctx=None):
+    if ctx is None:
+        ctx = args.ctx
     if args.model_zoo == "deeplab_plus_xception_coco":
         # TODO: waiting for the coco pretrained model
-        model = get_deeplab_plus_xception_coco(pretrained=False)
+        model = get_deeplab_plus_xception_coco(pretrained=False, ctx=ctx)
     else:
-        model = get_model(args.model_zoo, pretrained=True)
+        model = get_model(args.model_zoo, pretrained=True, ctx=ctx)
     # reset nclass
     if args.dataset.lower() == 'imaterialist':
         nclass = iMaterialistSegmentation.NUM_CLASS
