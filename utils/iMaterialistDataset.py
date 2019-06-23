@@ -105,7 +105,7 @@ class iMaterialistSegmentation(COCOSegmentation):
     CAT_LIST = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     NUM_CLASS = 14
     def __init__(self, root=os.path.expanduser('datasets/imaterialist'),
-                 split='train', mode=None, transform=None, **kwargs):
+                 split='train', mode=None, transform=None, tta=None, **kwargs):
         super(COCOSegmentation, self).__init__(root, split, mode, transform, **kwargs)
         from pycocotools import mask
         if split == 'train':
@@ -127,6 +127,8 @@ class iMaterialistSegmentation(COCOSegmentation):
             ids = list(self.coco.imgs.keys())
             self.ids = self._preprocess(ids, ids_file)
         self.transform = transform
+        if self.mode != "train":
+            self.tta = tta
 
     def _gen_seg_mask(self, target, h, w):
         mask = np.zeros((h, w), dtype=np.uint8)
@@ -162,12 +164,52 @@ class iMaterialistSegmentation(COCOSegmentation):
         mask_pad = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
         return im_pad, mask_pad
 
-    def _testval_sync_transform(self, img, mask):
-        # padding
-        img, mask = self._sync_pad(img, mask)
-        # resize
-        img = img.resize((self.crop_size, self.crop_size), Image.BILINEAR)
-        mask = mask.resize((self.crop_size, self.crop_size), Image.NEAREST)
+    def _resize_short_within(self, img, short, max_size, mult_base=1, interp=Image.BILINEAR):
+        """Resizes the original image by setting the shorter edge to size
+        and setting the longer edge accordingly. Also this function will ensure
+        the new image will not exceed ``max_size`` even at the longer side.
+
+        Parameters
+        ----------
+        img : PIL.Image
+            The original image.
+        short : int
+            Resize shorter side to ``short``.
+        max_size : int
+            Make sure the longer side of new image is smaller than ``max_size``.
+        mult_base : int, default is 1
+            Width and height are rounded to multiples of `mult_base`.
+        interp : default is Image.BILINEAR
+        Returns
+        -------
+        PIL.Image
+            An 'PIL.Image' containing the resized image.
+        """
+        w, h = img.size
+        im_size_min, im_size_max = (h, w) if w > h else (w, h)
+        scale = float(short) / float(im_size_min)
+        if np.round(scale * im_size_max / mult_base) * mult_base > max_size:
+            # fit in max_size
+            scale = float(np.floor(max_size / mult_base) * mult_base) / float(im_size_max)
+        new_w, new_h = (int(np.round(w * scale / mult_base) * mult_base),
+                        int(np.round(h * scale / mult_base) * mult_base))
+        img = img.resize((new_w, new_h), interp)
+        return img
+
+
+    def _testval_sync_transform(self, img, mask, padding=True):
+        """ resize image and mask while keeping ratio"""
+        if padding:
+            # padding and resize
+            img, mask = self._sync_pad(img, mask)
+            img = img.resize((self.crop_size, self.crop_size), Image.BILINEAR)
+            mask = mask.resize(img.size, Image.NEAREST)
+        else:
+            # resize without padding
+            short_size = self.crop_size*1.75
+            if max(img.size) > short_size:
+                img = self._resize_short_within(img, short_size, short_size*2)
+                mask = mask.resize(img.size, Image.NEAREST)
         # final transform
         img, mask = self._img_transform(img), self._mask_transform(mask)
         return img, mask
@@ -188,8 +230,8 @@ class iMaterialistSegmentation(COCOSegmentation):
             img, mask = self._val_sync_transform(img, mask)
         else:
             assert self.mode == 'testval'
-            img, mask = self._testval_sync_transform(img, mask)
-            # img, mask = self._img_transform(img), self._mask_transform(mask)
+            # resize without padding for memory reduction when test time augmentation
+            img, mask = self._testval_sync_transform(img, mask, not self.tta)
         # general resize, normalize and toTensor
         if self.transform is not None:
             img = self.transform(img)

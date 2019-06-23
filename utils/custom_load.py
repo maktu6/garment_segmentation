@@ -49,7 +49,7 @@ def get_custom_segm_dataset(mode, args):
             split_name, mode_name = 'test', 'test'
         if args.dataset.lower() == 'imaterialist':
             testset = iMaterialistSegmentation(root='datasets/imaterialist', \
-                            split=split_name, mode=mode_name, transform=input_transform)
+                            split=split_name, mode=mode_name, transform=input_transform, tta=args.tta)
         else:
             testset = get_segmentation_dataset(
                 args.dataset, split=split_name, mode=mode_name, transform=input_transform)

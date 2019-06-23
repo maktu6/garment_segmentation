@@ -139,6 +139,8 @@ def parse_args_for_segm():
                         help='evaluation only')
     parser.add_argument('--tta', action='store_true', default= False,
                         help='test time augmentation (evaluation only)')
+    parser.add_argument('--test-flip', action='store_true', default= False,
+                        help='mirror flip for test time irror')
     parser.add_argument('--no-val', action='store_true', default= False,
                             help='skip validation during training')
     # synchronized Batch Normalization

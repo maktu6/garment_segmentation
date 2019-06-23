@@ -58,8 +58,14 @@ def test(args):
                 targets = [target.as_in_context(predicts[0].context).expand_dims(0) \
                         for target in dsts]
             else:
-                predicts = evaluator(data.astype(args.dtype, copy=False))
+                data = data.astype(args.dtype, copy=False)
+                predicts = evaluator(data)
                 predicts = [x[0] for x in predicts]
+                if args.test_flip:
+                    assert (data.ndim ==4)
+                    fdata = data.flip(3)
+                    fpredicts = evaluator(fdata)
+                    predicts = [(x+y[0].flip(3))/2 for x, y in zip(predicts, fpredicts)]
                 targets = mx.gluon.utils.split_and_load(dsts, args.ctx, even_split=False)
             metric.update(targets, predicts)
             pixAcc, mIoU = metric.get()
@@ -79,5 +85,6 @@ if __name__ == "__main__":
     args = parse_args()
     if args.tta:
         args.test_batch_size = args.ngpus
+        # args.crop_size = int(args.crop_size*1.75)
     print('Testing model: ', args.resume)
     test(args)
