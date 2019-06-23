@@ -162,7 +162,10 @@ class iMaterialistSegmentation(COCOSegmentation):
 
         im_pad = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
         mask_pad = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=0)
-        return im_pad, mask_pad
+        # region for padding (set -1 later)
+        ignore_w = round((1-padw/float(long_size))*self.crop_size) if padw != 0 else None
+        ignore_h = round((1-padh/float(long_size))*self.crop_size) if padh != 0 else None
+        return im_pad, mask_pad, (ignore_w, ignore_h)
 
     def _resize_short_within(self, img, short, max_size, mult_base=1, interp=Image.BILINEAR):
         """Resizes the original image by setting the shorter edge to size
@@ -201,7 +204,7 @@ class iMaterialistSegmentation(COCOSegmentation):
         """ resize image and mask while keeping ratio"""
         if padding:
             # padding and resize
-            img, mask = self._sync_pad(img, mask)
+            img, mask, keep_size = self._sync_pad(img, mask)
             img = img.resize((self.crop_size, self.crop_size), Image.BILINEAR)
             mask = mask.resize(img.size, Image.NEAREST)
         else:
@@ -212,6 +215,8 @@ class iMaterialistSegmentation(COCOSegmentation):
                 mask = mask.resize(img.size, Image.NEAREST)
         # final transform
         img, mask = self._img_transform(img), self._mask_transform(mask)
+        if padding:
+            mask[keep_size[1]:, keep_size[0]:] = -1
         return img, mask
 
     def __getitem__(self, index):
