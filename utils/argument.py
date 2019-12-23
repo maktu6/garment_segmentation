@@ -91,6 +91,8 @@ def parse_args_for_segm():
                         help='crop image size')
     parser.add_argument('--train-split', type=str, default='train',
                         help='dataset train split (default: train)')
+    parser.add_argument('--alter-bg', type=float, default=0,
+                        help='the probality of replace the background with single color')
     # training hyper params
     parser.add_argument('--aux', action='store_true', default= False,
                         help='Auxiliary loss')

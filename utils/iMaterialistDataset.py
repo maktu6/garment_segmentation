@@ -1,9 +1,36 @@
-import numpy as np
 from gluoncv.data import COCOInstance, COCOSegmentation
 from pycocotools.coco import COCO
+import numpy as np
+from PIL import Image, ImageOps
 import os
 import pickle
-from PIL import Image, ImageOps
+import random
+from io import BytesIO
+
+
+def randomJPEGcompression(image, min_quality=75):
+    qf = random.randrange(min_quality, 100)
+    outputIoStream = BytesIO()
+    image = Image.fromarray(image)
+    image.save(outputIoStream, "JPEG", quality=qf, optimice=True)
+    outputIoStream.seek(0)
+    return np.array(Image.open(outputIoStream))
+
+def random_alter_background(img_np, mask_np, white_prob=0.3):
+    if random.random()<white_prob:
+        # gray or while
+        if random.random()<0.5:
+            bg_value = np.random.randint(220, 250, size=(1,1,1), dtype="uint8")
+        else:
+            bg_value = np.random.randint(250, 256, size=(1,1,1), dtype="uint8")
+    else:
+        # random color
+        bg_value = np.random.randint(0,255,size=(1,1,3), dtype="uint8")
+    # replace the background
+    bg_mask = mask_np[:,:,None]==0
+    bg = bg_value*bg_mask
+    img_new_np = img_np*(~bg_mask)+bg
+    return img_new_np
 
 class COCOiMaterialist(COCOInstance):
     
@@ -105,7 +132,7 @@ class iMaterialistSegmentation(COCOSegmentation):
     CAT_LIST = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     NUM_CLASS = 14
     def __init__(self, root=os.path.expanduser('datasets/imaterialist'),
-                 split='train', mode=None, transform=None, tta=None, **kwargs):
+                 split='train', mode=None, transform=None, tta=None, alter_bg=False, **kwargs):
         super(COCOSegmentation, self).__init__(root, split, mode, transform, **kwargs)
         from pycocotools import mask
         if split == 'train':
@@ -127,6 +154,7 @@ class iMaterialistSegmentation(COCOSegmentation):
             ids = list(self.coco.imgs.keys())
             self.ids = self._preprocess(ids, ids_file)
         self.transform = transform
+        self.alter_bg = alter_bg
         if self.mode != "train":
             self.tta = tta
 
@@ -149,9 +177,12 @@ class iMaterialistSegmentation(COCOSegmentation):
     @property
     def classes(self):
         """Category names."""
-        return ('background', 'shirt, blouse', 'top, t-shirt, sweatshirt', 'sweater', 
-                'cardigan', 'jacket', 'vest', 'pants', 'shorts', 'skirt', 'coat', 
-                'dress', 'jumpsuit', 'cape')
+        if self.alter_bg:
+            return ('background', 'garment')
+        else:
+            return ('background', 'shirt, blouse', 'top, t-shirt, sweatshirt', 'sweater', 
+                    'cardigan', 'jacket', 'vest', 'pants', 'shorts', 'skirt', 'coat', 
+                    'dress', 'jumpsuit', 'cape')
 
     def _sync_pad(self, img, mask):
         w, h = img.size
@@ -219,6 +250,15 @@ class iMaterialistSegmentation(COCOSegmentation):
             mask[keep_size[1]:, keep_size[0]:] = -1
         return img, mask
 
+    def _random_alter_background(self, img, mask):
+        # alter background and random jpeg quality
+        img_np = img.asnumpy().astype('uint8')
+        mask_np = mask.asnumpy()
+        img_new_np = random_alter_background(img_np, mask_np)
+        img_new_np = randomJPEGcompression(img_new_np)
+        img_new = self._img_transform(img_new_np)
+        return img_new
+
     def __getitem__(self, index):
         coco = self.coco
         img_id = self.ids[index]
@@ -226,11 +266,16 @@ class iMaterialistSegmentation(COCOSegmentation):
         path = img_metadata['file_name']
         img = Image.open(os.path.join(self.root, path)).convert('RGB')
         cocotarget = coco.loadAnns(coco.getAnnIds(imgIds=img_id))
-        mask = Image.fromarray(self._gen_seg_mask(
-            cocotarget, img_metadata['height'], img_metadata['width']))
+        mask = self._gen_seg_mask(
+            cocotarget, img_metadata['height'], img_metadata['width'])
+        if self.alter_bg:
+            mask = (mask>0).astype('uint8')
+        mask = Image.fromarray(mask)
         # synchrosized transform
         if self.mode == 'train':
             img, mask = self._sync_transform(img, mask)
+            if self.alter_bg and (random.random() < self.alter_bg):
+                img = self._random_alter_background(img, mask)
         elif self.mode == 'val':
             img, mask = self._val_sync_transform(img, mask)
         else:
