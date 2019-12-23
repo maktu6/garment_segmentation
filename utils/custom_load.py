@@ -91,10 +91,7 @@ def get_pretrained_segmentation_model(args, ctx=None):
         model = get_model(args.model_zoo, pretrained=True, ctx=ctx)
     # reset nclass
     if args.dataset.lower() == 'imaterialist':
-        if args.alter_bg:
-            nclass = 2
-        else:
-            nclass = iMaterialistSegmentation.NUM_CLASS
+        nclass = iMaterialistSegmentation.NUM_CLASS
         reset_nclass(model, nclass)
     if args.freeze_bn:
         freeze_bn(model)

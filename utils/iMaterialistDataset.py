@@ -155,6 +155,8 @@ class iMaterialistSegmentation(COCOSegmentation):
             self.ids = self._preprocess(ids, ids_file)
         self.transform = transform
         self.alter_bg = alter_bg
+        if self.alter_bg:
+            self.NUM_CLASS = 2
         if self.mode != "train":
             self.tta = tta
 
