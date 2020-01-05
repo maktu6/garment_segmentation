@@ -67,7 +67,7 @@ class Trainer(object):
             last_batch='rollover', num_workers=args.workers)
         # create network
         if args.model_zoo is not None:
-            model = get_pretrained_segmentation_model(args)
+            model = get_pretrained_segmentation_model(args, nclass=trainset.NUM_CLASS)
             self.logger.info("model: %s"%args.model_zoo)
         else:
             model = get_segmentation_model(model=args.model, dataset=args.dataset,

@@ -81,7 +81,7 @@ def reset_nclass(model, nclass):
     replace_conv(model.auxlayer.block, 4, nclass)
     model.nclass = nclass
 
-def get_pretrained_segmentation_model(args, ctx=None):
+def get_pretrained_segmentation_model(args, ctx=None, nclass=None):
     if ctx is None:
         ctx = args.ctx
     if args.model_zoo == "deeplab_plus_xception_coco":
@@ -90,8 +90,7 @@ def get_pretrained_segmentation_model(args, ctx=None):
     else:
         model = get_model(args.model_zoo, pretrained=True, ctx=ctx)
     # reset nclass
-    if args.dataset.lower() == 'imaterialist':
-        nclass = iMaterialistSegmentation.NUM_CLASS
+    if (args.dataset.lower() == 'imaterialist') and (nclass is not None):
         reset_nclass(model, nclass)
     if args.freeze_bn:
         freeze_bn(model)
