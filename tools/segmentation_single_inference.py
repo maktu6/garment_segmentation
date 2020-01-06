@@ -103,8 +103,7 @@ def main(args):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='MXNet Gluon \
-                                     Segmentation')
+    parser = argparse.ArgumentParser(description='segmentation inference for single image')
     # model and dataset 
     parser.add_argument('--weight', type=str,
                         help='the path of model weight')
